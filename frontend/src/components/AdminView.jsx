@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { StatusChip } from './ui.jsx';
+import { StatusChip, SectionTitle, Avatar, Stars, timeAgo } from './ui.jsx';
+import {
+  IconBriefcase, IconCheck, IconClock, IconRupee, IconUser, IconChart, IconBell, IconMapPin,
+} from './icons.jsx';
 
 export default function AdminView({ ctx }) {
   const [stats, setStats] = useState(null);
@@ -19,60 +22,109 @@ export default function AdminView({ ctx }) {
   return (
     <div className="space-y-6">
       {stats && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Open jobs" value={stats.jobs.open} />
-          <Stat label="Assigned" value={stats.jobs.assigned} />
-          <Stat label="Completed" value={stats.jobs.completed} />
-          <Stat label="Revenue" value={`₹${stats.revenue}`} />
-          <Stat label="Workers" value={stats.workers.total} />
-          <Stat label="Available" value={stats.workers.available} />
-          <Stat label="On cooldown" value={stats.workers.onCooldown} />
-          <Stat label="Total jobs" value={stats.jobs.total} />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Stat icon={IconClock} tone="amber" label="Open jobs" value={stats.jobs.open} />
+          <Stat icon={IconBriefcase} tone="blue" label="Assigned" value={stats.jobs.assigned} />
+          <Stat icon={IconCheck} tone="brand" label="Completed" value={stats.jobs.completed} />
+          <Stat icon={IconRupee} tone="emerald" label="Revenue" value={`₹${stats.revenue}`} />
+          <Stat icon={IconUser} tone="slate" label="Workers" value={stats.workers.total} />
+          <Stat icon={IconCheck} tone="brand" label="Available" value={stats.workers.available} />
+          <Stat icon={IconClock} tone="rose" label="On cooldown" value={stats.workers.onCooldown} />
+          <Stat icon={IconChart} tone="slate" label="Total jobs" value={stats.jobs.total} />
         </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="card">
-          <h2 className="mb-2 font-semibold">Jobs</h2>
+          <SectionTitle icon={IconBriefcase} right={<span className="text-xs text-slate-400">{jobs.length}</span>}>Jobs</SectionTitle>
           <Table
-            head={['Job', 'Service', 'Location', 'Status', 'Assigned']}
+            head={['Job', 'Service', 'Location', 'Status', 'Worker']}
             rows={jobs.map((j) => [
-              j.jobId, j.serviceType, j.location, <StatusChip status={j.jobStatus} />, j.assignedWorkerId || '—',
+              <span className="font-mono text-xs text-slate-400">{j.jobId}</span>,
+              j.serviceType,
+              <span className="inline-flex items-center gap-1 text-slate-500"><IconMapPin size={11} />{j.location}</span>,
+              <StatusChip status={j.jobStatus} />,
+              j.assignedWorkerId || '—',
             ])}
           />
         </div>
 
         <div className="card">
-          <h2 className="mb-2 font-semibold">Workers</h2>
+          <SectionTitle icon={IconUser} right={<span className="text-xs text-slate-400">{workers.length}</span>}>Workers</SectionTitle>
           <Table
-            head={['ID', 'Name', 'Skill', 'Loc', 'Avail', '★', 'Jobs']}
+            head={['Name', 'Skill', 'Location', 'Status', 'Rating', 'Jobs']}
             rows={workers.map((w) => [
-              w.workerId, w.name, w.skill, w.location,
-              <span className="flex items-center gap-1"><StatusChip status={w.availability} />{w.onCooldown ? '❄' : ''}</span>,
-              w.rating, w.recentJobs,
+              <span className="inline-flex items-center gap-2">
+                <Avatar name={w.name} size={22} />
+                <span className="font-medium text-slate-700">{w.name}</span>
+              </span>,
+              w.skill,
+              w.location,
+              <span className="inline-flex items-center gap-1">
+                <StatusChip status={w.availability} />
+                {w.onCooldown && <span title="On cooldown">❄️</span>}
+              </span>,
+              <span className="inline-flex items-center gap-1"><Stars value={w.rating} size={10} /><span className="text-xs text-slate-500">{Number(w.rating).toFixed(1)}</span></span>,
+              w.recentJobs,
             ])}
           />
         </div>
       </div>
 
       <div className="card">
-        <h2 className="mb-2 font-semibold">Activity feed</h2>
-        <div className="max-h-80 space-y-1 overflow-auto text-sm">
-          {activity.map((a) => (
-            <div key={a.id} className="flex gap-2 border-b border-slate-50 py-1">
-              <span className="w-32 shrink-0 text-xs text-slate-400">{new Date(a.ts).toLocaleTimeString()}</span>
-              <span className={`chip ${badge(a.kind)}`}>{a.kind}{a.channel ? `/${a.channel}` : ''}</span>
-              <span className="flex-1">{a.message}</span>
-              {a.simulated && <span className="text-[10px] text-slate-400">sim</span>}
-            </div>
-          ))}
-        </div>
+        <SectionTitle icon={IconBell} right={<span className="text-xs text-slate-400">{activity.length} events</span>}>Activity feed</SectionTitle>
+        <ActivityFeed activity={activity} />
       </div>
     </div>
   );
 }
 
-const badge = (kind) => ({
+const TONES = {
+  amber: 'bg-amber-50 text-amber-600',
+  blue: 'bg-blue-50 text-blue-600',
+  brand: 'bg-brand-50 text-brand-600',
+  emerald: 'bg-emerald-50 text-emerald-600',
+  rose: 'bg-rose-50 text-rose-600',
+  slate: 'bg-slate-100 text-slate-500',
+};
+
+function Stat({ icon: Icon, tone = 'slate', label, value }) {
+  return (
+    <div className="card-tight flex items-center gap-3">
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${TONES[tone]}`}>
+        <Icon size={16} />
+      </span>
+      <div className="min-w-0">
+        <div className="text-xl font-semibold leading-tight text-slate-900">{value}</div>
+        <div className="truncate text-[11px] text-slate-500">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function Table({ head, rows }) {
+  return (
+    <div className="-mx-2 overflow-x-auto px-2">
+      <table className="w-full text-left text-sm">
+        <thead>
+          <tr className="text-[11px] uppercase tracking-wide text-slate-400">
+            {head.map((h) => <th key={h} className="whitespace-nowrap pb-2 pr-4 font-medium">{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="border-t border-slate-100 hover:bg-slate-50/60">
+              {r.map((c, j) => <td key={j} className="whitespace-nowrap py-2 pr-4 text-slate-700">{c}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length === 0 && <p className="py-4 text-center text-xs text-slate-400">Nothing yet.</p>}
+    </div>
+  );
+}
+
+const KIND_BADGE = {
   job: 'bg-amber-100 text-amber-800',
   interest: 'bg-blue-100 text-blue-800',
   hire: 'bg-brand-100 text-brand-700',
@@ -80,33 +132,27 @@ const badge = (kind) => ({
   notify: 'bg-slate-100 text-slate-600',
   payment: 'bg-emerald-100 text-emerald-800',
   rating: 'bg-pink-100 text-pink-800',
-}[kind] || 'bg-slate-100 text-slate-600');
+};
 
-function Stat({ label, value }) {
-  return (
-    <div className="card">
-      <div className="text-2xl font-semibold">{value}</div>
-      <div className="text-xs text-slate-500">{label}</div>
-    </div>
-  );
-}
+function ActivityFeed({ activity }) {
+  const ref = useRef(null);
+  useEffect(() => { if (ref.current) ref.current.scrollTop = 0; }, [activity]);
 
-function Table({ head, rows }) {
+  if (activity.length === 0) {
+    return <p className="py-6 text-center text-xs text-slate-400">No activity yet.</p>;
+  }
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="text-xs text-slate-400">{head.map((h) => <th key={h} className="pb-1 pr-3 font-medium">{h}</th>)}</tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-t border-slate-100">
-              {r.map((c, j) => <td key={j} className="py-1.5 pr-3">{c}</td>)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {rows.length === 0 && <p className="py-2 text-xs text-slate-400">Nothing yet.</p>}
+    <div ref={ref} className="max-h-96 space-y-0.5 overflow-auto">
+      {activity.map((a) => (
+        <div key={a.id} className="flex items-start gap-2.5 rounded-lg px-1 py-1.5 text-sm hover:bg-slate-50">
+          <span className="mt-0.5 w-16 shrink-0 text-right text-[11px] text-slate-400">{timeAgo(a.ts)}</span>
+          <span className={`chip shrink-0 ${KIND_BADGE[a.kind] || 'bg-slate-100 text-slate-600'}`}>
+            {a.kind}{a.channel ? `·${a.channel}` : ''}
+          </span>
+          <span className="flex-1 text-slate-700">{a.message}</span>
+          {a.simulated && <span className="mt-0.5 shrink-0 rounded bg-slate-100 px-1 text-[10px] text-slate-400">sim</span>}
+        </div>
+      ))}
     </div>
   );
 }
