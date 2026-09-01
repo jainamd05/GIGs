@@ -1,0 +1,21 @@
+{
+  "name": "sahayak-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sahayak cooperative gig-matching backend — replicates the n8n workflow logic (skill/location/membership matching, cooldown fairness, interest -> hire -> assignment lifecycle) on Express + node:sqlite.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "seed": "node scripts/seed.js",
+    "smoke": "node scripts/smoke.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "nodemailer": "^6.9.16",
+    "twilio": "^5.4.0"
+  }
+}
