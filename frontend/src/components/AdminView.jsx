@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { StatusChip, SectionTitle, Avatar, Stars, timeAgo } from './ui.jsx';
+import { StatusChip, SectionTitle, Avatar, Stars } from './ui.jsx';
+import { timeAgo } from '../lib.js';
 import {
   IconBriefcase, IconCheck, IconClock, IconRupee, IconUser, IconChart, IconBell, IconMapPin,
 } from './icons.jsx';
@@ -25,10 +26,10 @@ export default function AdminView({ ctx }) {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat icon={IconClock} tone="amber" label="Open jobs" value={stats.jobs.open} />
           <Stat icon={IconBriefcase} tone="blue" label="Assigned" value={stats.jobs.assigned} />
-          <Stat icon={IconCheck} tone="brand" label="Completed" value={stats.jobs.completed} />
-          <Stat icon={IconRupee} tone="emerald" label="Revenue" value={`₹${stats.revenue}`} />
+          <Stat icon={IconCheck} tone="accent" label="Completed" value={stats.jobs.completed} />
+          <Stat icon={IconRupee} tone="accent" label="Revenue" value={`₹${stats.revenue}`} />
           <Stat icon={IconUser} tone="slate" label="Workers" value={stats.workers.total} />
-          <Stat icon={IconCheck} tone="brand" label="Available" value={stats.workers.available} />
+          <Stat icon={IconCheck} tone="accent" label="Available" value={stats.workers.available} />
           <Stat icon={IconClock} tone="rose" label="On cooldown" value={stats.workers.onCooldown} />
           <Stat icon={IconChart} tone="slate" label="Total jobs" value={stats.jobs.total} />
         </div>
@@ -40,11 +41,11 @@ export default function AdminView({ ctx }) {
           <Table
             head={['Job', 'Service', 'Location', 'Status', 'Worker']}
             rows={jobs.map((j) => [
-              <span className="font-mono text-xs text-slate-400">{j.jobId}</span>,
+              <span className="font-mono text-[11px] text-slate-400">{j.jobId}</span>,
               j.serviceType,
               <span className="inline-flex items-center gap-1 text-slate-500"><IconMapPin size={11} />{j.location}</span>,
               <StatusChip status={j.jobStatus} />,
-              j.assignedWorkerId || '—',
+              j.assignedWorkerId ? <span className="font-mono text-xs">{j.assignedWorkerId}</span> : '—',
             ])}
           />
         </div>
@@ -81,9 +82,8 @@ export default function AdminView({ ctx }) {
 
 const TONES = {
   amber: 'bg-amber-50 text-amber-600',
-  blue: 'bg-blue-50 text-blue-600',
-  brand: 'bg-brand-50 text-brand-600',
-  emerald: 'bg-emerald-50 text-emerald-600',
+  blue: 'bg-brand-50 text-brand-600',
+  accent: 'bg-accent-50 text-accent-600',
   rose: 'bg-rose-50 text-rose-600',
   slate: 'bg-slate-100 text-slate-500',
 };
@@ -91,11 +91,11 @@ const TONES = {
 function Stat({ icon: Icon, tone = 'slate', label, value }) {
   return (
     <div className="card-tight flex items-center gap-3">
-      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${TONES[tone]}`}>
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${TONES[tone]}`}>
         <Icon size={16} />
       </span>
       <div className="min-w-0">
-        <div className="text-xl font-semibold leading-tight text-slate-900">{value}</div>
+        <div className="font-display text-xl font-semibold leading-tight text-slate-900">{value}</div>
         <div className="truncate text-[11px] text-slate-500">{label}</div>
       </div>
     </div>
@@ -107,8 +107,8 @@ function Table({ head, rows }) {
     <div className="-mx-2 overflow-x-auto px-2">
       <table className="w-full text-left text-sm">
         <thead>
-          <tr className="text-[11px] uppercase tracking-wide text-slate-400">
-            {head.map((h) => <th key={h} className="whitespace-nowrap pb-2 pr-4 font-medium">{h}</th>)}
+          <tr className="text-[11px] uppercase tracking-wider text-slate-400">
+            {head.map((h) => <th key={h} className="whitespace-nowrap pb-2 pr-4 font-semibold">{h}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -126,9 +126,9 @@ function Table({ head, rows }) {
 
 const KIND_BADGE = {
   job: 'bg-amber-100 text-amber-800',
-  interest: 'bg-blue-100 text-blue-800',
-  hire: 'bg-brand-100 text-brand-700',
-  signup: 'bg-purple-100 text-purple-800',
+  interest: 'bg-brand-100 text-brand-800',
+  hire: 'bg-accent-100 text-accent-700',
+  signup: 'bg-violet-100 text-violet-800',
   notify: 'bg-slate-100 text-slate-600',
   payment: 'bg-emerald-100 text-emerald-800',
   rating: 'bg-pink-100 text-pink-800',

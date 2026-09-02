@@ -14,6 +14,21 @@ export const config = {
     .map((s) => s.trim())
     .filter(Boolean),
 
+  // ---- Auth (OTP login/signup + signed session tokens) --------------------
+  authSecret: process.env.AUTH_SECRET || 'sahayak-dev-secret-change-me',
+  tokenTtlDays: Number(process.env.TOKEN_TTL_DAYS || 7),
+  otpTtlMin: Number(process.env.OTP_TTL_MIN || 10),
+  adminInviteCode: process.env.ADMIN_INVITE_CODE || 'SAHAYAK-ADMIN',
+  adminEmail: process.env.ADMIN_EMAIL || 'admin@sahayak.local',
+  adminPhone: process.env.ADMIN_PHONE || '+910000000000',
+  adminName: process.env.ADMIN_NAME || 'Sahayak Admin',
+
+  // ---- Gig expiry -------------------------------------------------------
+  // An OPEN gig with no customer response (no hire) is auto-cancelled after
+  // this many hours. Lower it (e.g. 0.01) to demo the sweep quickly.
+  gigExpiryHours: Number(process.env.GIG_EXPIRY_HOURS ?? 48),
+  sweepMs: Number(process.env.EXPIRY_SWEEP_MS || 600000),
+
   smtp: {
     host: process.env.SMTP_HOST || '',
     port: Number(process.env.SMTP_PORT || 465),

@@ -1,39 +1,28 @@
-import { IconStar, IconCheck, IconAlert, IconInfo } from './icons.jsx';
+import { IconStar, IconCheck, IconAlert, IconInfo, IconShield, IconArrowRight } from './icons.jsx';
+import { fairWage, matchScore, coopId, yearsExp, STAGES } from '../lib.js';
 
 // ---------------------------------------------------------------------------
-// Status chip — small coloured pill with a leading dot
+// Status chip
 // ---------------------------------------------------------------------------
 const STATUS_STYLES = {
   OPEN: 'bg-amber-100 text-amber-800',
-  ASSIGNED: 'bg-blue-100 text-blue-800',
-  COMPLETED: 'bg-brand-100 text-brand-700',
+  ASSIGNED: 'bg-brand-100 text-brand-700',
+  COMPLETED: 'bg-accent-100 text-accent-700',
   CANCELLED: 'bg-slate-200 text-slate-600',
   INTERESTED: 'bg-amber-100 text-amber-800',
-  HIRED: 'bg-brand-100 text-brand-700',
+  HIRED: 'bg-accent-100 text-accent-700',
   RELEASED: 'bg-slate-200 text-slate-600',
-  Available: 'bg-brand-100 text-brand-700',
+  Available: 'bg-accent-100 text-accent-700',
   Busy: 'bg-rose-100 text-rose-700',
 };
 const DOT_STYLES = {
-  OPEN: 'bg-amber-500',
-  ASSIGNED: 'bg-blue-500',
-  COMPLETED: 'bg-brand-500',
-  INTERESTED: 'bg-amber-500',
-  HIRED: 'bg-brand-500',
-  Available: 'bg-brand-500',
-  Busy: 'bg-rose-500',
+  OPEN: 'bg-amber-500', ASSIGNED: 'bg-brand-500', COMPLETED: 'bg-accent-500',
+  INTERESTED: 'bg-amber-500', HIRED: 'bg-accent-500', Available: 'bg-accent-500', Busy: 'bg-rose-500',
 };
-
 const LABELS = {
-  OPEN: 'Open',
-  ASSIGNED: 'Assigned',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
-  INTERESTED: 'Interested',
-  HIRED: 'Hired',
-  RELEASED: 'Released',
+  OPEN: 'Finding worker', ASSIGNED: 'Assigned', COMPLETED: 'Completed', CANCELLED: 'Cancelled',
+  INTERESTED: 'Interested', HIRED: 'Hired', RELEASED: 'Released',
 };
-
 export function StatusChip({ status }) {
   return (
     <span className={`chip ${STATUS_STYLES[status] || 'bg-slate-100 text-slate-600'}`}>
@@ -44,7 +33,7 @@ export function StatusChip({ status }) {
 }
 
 // ---------------------------------------------------------------------------
-// Form field — label, optional hint, input / select
+// Form field
 // ---------------------------------------------------------------------------
 export function Field({ label, hint, options, className = '', ...props }) {
   return (
@@ -52,9 +41,7 @@ export function Field({ label, hint, options, className = '', ...props }) {
       {label && <span className="label">{label}</span>}
       {options ? (
         <select className="field" {...props}>
-          {options.map((o) => (
-            <option key={o} value={o}>{o}</option>
-          ))}
+          {options.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       ) : (
         <input className={`field ${className}`} {...props} />
@@ -65,13 +52,13 @@ export function Field({ label, hint, options, className = '', ...props }) {
 }
 
 // ---------------------------------------------------------------------------
-// Section title + optional trailing content
+// Section title
 // ---------------------------------------------------------------------------
 export function SectionTitle({ children, right, icon: Icon }) {
   return (
     <div className="mb-3 flex items-center justify-between">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-        {Icon && <Icon size={15} className="text-slate-400" />}
+      <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800">
+        {Icon && <Icon size={15} className="text-brand-500" />}
         {children}
       </h2>
       {right}
@@ -84,16 +71,16 @@ export function SectionTitle({ children, right, icon: Icon }) {
 // ---------------------------------------------------------------------------
 export function EmptyState({ icon: Icon, title, hint }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-10 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-10 text-center">
       {Icon && <Icon size={22} className="text-slate-300" />}
-      <p className="text-sm font-medium text-slate-500">{title}</p>
+      <p className="text-sm font-semibold text-slate-500">{title}</p>
       {hint && <p className="max-w-xs text-xs text-slate-400">{hint}</p>}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Star rating — read-only display or interactive input
+// Stars
 // ---------------------------------------------------------------------------
 export function Stars({ value = 0, onChange, size = 14 }) {
   const interactive = typeof onChange === 'function';
@@ -118,15 +105,11 @@ export function Stars({ value = 0, onChange, size = 14 }) {
 }
 
 // ---------------------------------------------------------------------------
-// Avatar — initials on a deterministic colour
+// Avatar
 // ---------------------------------------------------------------------------
 const AVATAR_COLORS = [
-  'bg-brand-100 text-brand-700',
-  'bg-blue-100 text-blue-700',
-  'bg-amber-100 text-amber-700',
-  'bg-purple-100 text-purple-700',
-  'bg-rose-100 text-rose-700',
-  'bg-teal-100 text-teal-700',
+  'bg-brand-100 text-brand-700', 'bg-violet-100 text-violet-700', 'bg-amber-100 text-amber-700',
+  'bg-accent-100 text-accent-700', 'bg-rose-100 text-rose-700', 'bg-sky-100 text-sky-700',
 ];
 export function Avatar({ name = '?', size = 36 }) {
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('') || '?';
@@ -135,8 +118,8 @@ export function Avatar({ name = '?', size = 36 }) {
   const color = AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
   return (
     <span
-      className={`grid shrink-0 place-items-center rounded-full font-semibold ${color}`}
-      style={{ width: size, height: size, fontSize: size * 0.38 }}
+      className={`grid shrink-0 place-items-center rounded-xl font-bold ${color}`}
+      style={{ width: size, height: size, fontSize: size * 0.36 }}
     >
       {initials}
     </span>
@@ -152,8 +135,8 @@ export function Toast({ toast }) {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4 sm:justify-end sm:pr-6">
       <div
-        className={`pointer-events-auto flex max-w-sm items-start gap-3 rounded-xl px-4 py-3 text-sm text-white shadow-pop animate-toast-in ${
-          error ? 'bg-rose-600' : 'bg-slate-900'
+        className={`pointer-events-auto flex max-w-sm items-start gap-3 rounded-2xl px-4 py-3 text-sm text-white shadow-pop animate-toast-in ${
+          error ? 'bg-rose-600' : 'bg-ink-800'
         }`}
         role="status"
       >
@@ -165,17 +148,17 @@ export function Toast({ toast }) {
 }
 
 // ---------------------------------------------------------------------------
-// Inline info / warning banner
+// Banner
 // ---------------------------------------------------------------------------
 export function Banner({ tone = 'info', children }) {
   const tones = {
-    info: 'border-blue-200 bg-blue-50 text-blue-800',
+    info: 'border-brand-200 bg-brand-50 text-brand-800',
     warn: 'border-amber-200 bg-amber-50 text-amber-800',
     error: 'border-rose-200 bg-rose-50 text-rose-800',
   };
   const Icon = tone === 'info' ? IconInfo : IconAlert;
   return (
-    <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${tones[tone]}`}>
+    <div className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-xs ${tones[tone]}`}>
       <Icon size={14} className="mt-0.5 shrink-0" />
       <div className="leading-relaxed">{children}</div>
     </div>
@@ -183,14 +166,189 @@ export function Banner({ tone = 'info', children }) {
 }
 
 // ---------------------------------------------------------------------------
-// Relative time (e.g. "3m ago")
+// Gradient panel header (reference: sheet headers)
 // ---------------------------------------------------------------------------
-export function timeAgo(ts) {
-  const d = (Date.now() - new Date(ts).getTime()) / 1000;
-  if (d < 45) return 'just now';
-  if (d < 90) return '1m ago';
-  if (d < 3600) return `${Math.round(d / 60)}m ago`;
-  if (d < 5400) return '1h ago';
-  if (d < 86400) return `${Math.round(d / 3600)}h ago`;
-  return `${Math.round(d / 86400)}d ago`;
+export function GradientHeader({ eyebrow, title, subtitle, icon: Icon, onClose, variant = 'brand' }) {
+  const bg = variant === 'ink' ? 'bg-grad-ink' : 'bg-grad-brand';
+  return (
+    <div className={`relative overflow-hidden rounded-2xl ${bg} px-5 py-4 text-white`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2.5">
+          {Icon && (
+            <span className="mt-0.5 grid h-8 w-8 place-items-center rounded-xl bg-white/15">
+              <Icon size={16} />
+            </span>
+          )}
+          <div>
+            {eyebrow && <div className="text-[10px] font-bold uppercase tracking-widest text-white/70">{eyebrow}</div>}
+            <div className="font-display text-lg font-semibold leading-tight">{title}</div>
+            {subtitle && <div className="text-xs text-white/80">{subtitle}</div>}
+          </div>
+        </div>
+        {onClose && (
+          <button onClick={onClose} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/15 hover:bg-white/25">
+            <span className="text-lg leading-none">×</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
+
+// ---------------------------------------------------------------------------
+// Stepper (reference: dispatch tracking 4-stage)
+// ---------------------------------------------------------------------------
+export function Stepper({ current = 0, steps = STAGES }) {
+  return (
+    <div className="flex items-start">
+      {steps.map((label, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <div key={label} className="flex flex-1 flex-col items-center">
+            <div className="flex w-full items-center">
+              <span className={`h-0.5 flex-1 ${i === 0 ? 'opacity-0' : done || active ? 'bg-brand-500' : 'bg-slate-200'}`} />
+              <span
+                className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11px] font-bold ${
+                  done ? 'bg-accent-500 text-white'
+                  : active ? 'bg-brand-600 text-white ring-4 ring-brand-100'
+                  : 'bg-slate-100 text-slate-400'
+                }`}
+              >
+                {done ? <IconCheck size={13} /> : i + 1}
+              </span>
+              <span className={`h-0.5 flex-1 ${i === steps.length - 1 ? 'opacity-0' : done ? 'bg-brand-500' : 'bg-slate-200'}`} />
+            </div>
+            <span className={`mt-1.5 text-[11px] font-medium ${active ? 'text-brand-700' : done ? 'text-slate-600' : 'text-slate-400'}`}>
+              {label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Fair Wage breakdown (reference: Booking & Price Transparency)
+// ---------------------------------------------------------------------------
+export function FairWageCard({ service, worker, bookingId }) {
+  const w = fairWage(service, worker);
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-brand-100 bg-brand-50/60 p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-sm font-bold text-brand-800">
+            <IconShield size={14} /> Fair Wage Breakdown
+          </span>
+          {bookingId && <span className="font-mono text-[11px] text-slate-400">ID: {bookingId}</span>}
+        </div>
+        <dl className="space-y-1.5 text-sm">
+          {w.lines.map((l) => (
+            <div key={l.label} className="flex items-center justify-between">
+              <dt className="text-slate-600">{l.label}</dt>
+              <dd className={`font-mono font-semibold ${l.add ? 'text-brand-600' : 'text-slate-800'}`}>
+                {l.add ? '+ ' : ''}₹{l.value}
+              </dd>
+            </div>
+          ))}
+          <div className="mt-1 flex items-center justify-between border-t border-brand-100 pt-2">
+            <dt className="font-bold text-slate-800">Total Guaranteed Price</dt>
+            <dd className="font-mono text-base font-bold text-brand-700">₹{w.total}</dd>
+          </div>
+        </dl>
+        <div className="mt-2 space-y-1 border-t border-brand-100 pt-2 text-[11px] text-slate-500">
+          {w.pools.map((p) => (
+            <div key={p.label} className="flex justify-between">
+              <span>• {p.label}</span>
+              <span className="font-mono text-accent-600">₹{p.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between rounded-2xl bg-grad-ink px-4 py-3 text-white">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-white/60">Total transparent rate</div>
+          <div className="text-[11px] text-white/70">Guaranteed rate · no hidden costs</div>
+        </div>
+        <div className="font-mono text-2xl font-bold text-brand-300">₹{w.total}</div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Payment method picker (reference: BHIM / Card / Cash)
+// ---------------------------------------------------------------------------
+export const PAYMENT_METHODS = [
+  { id: 'UPI', label: 'BHIM / UPI' },
+  { id: 'Card', label: 'Card' },
+  { id: 'Cash', label: 'Cash on Job' },
+];
+export function PaymentMethods({ value, onChange }) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {PAYMENT_METHODS.map((m) => (
+        <button
+          key={m.id}
+          type="button"
+          onClick={() => onChange(m.id)}
+          className={`rounded-xl border px-2 py-3 text-xs font-semibold transition-colors ${
+            value === m.id ? 'border-brand-600 bg-brand-50 text-brand-700 shadow-glow' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+          }`}
+        >
+          {m.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Worker match card (reference: AI Smart Worker Matching)
+// ---------------------------------------------------------------------------
+export function WorkerMatchCard({ worker, job, top, action, note }) {
+  const score = matchScore(worker, job);
+  return (
+    <div className={`rounded-2xl border bg-white p-4 shadow-card ${top ? 'border-accent-400 ring-1 ring-accent-200' : 'border-slate-200'}`}>
+      {top && (
+        <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-700">
+          <IconStar size={11} fill="currentColor" /> AI top recommended
+        </div>
+      )}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Avatar name={worker.workerName || worker.name} size={44} />
+          <div>
+            <div className="flex items-center gap-1 font-semibold text-slate-800">
+              {worker.workerName || worker.name}
+              <IconShield size={13} className="text-brand-500" />
+            </div>
+            <div className="text-xs text-slate-500">{worker.skill || job.serviceType}</div>
+            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500">
+              <span className="inline-flex items-center gap-0.5 font-semibold text-amber-500">
+                <IconStar size={11} fill="currentColor" />{Number(worker.rating ?? 4.5).toFixed(1)}
+              </span>
+              <span>· {yearsExp(worker)} yrs exp</span>
+              <span>· {worker.location}</span>
+            </div>
+          </div>
+        </div>
+        <span className="chip bg-accent-100 text-accent-700">{score}% Match</span>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <span className="chip bg-brand-50 text-brand-700"><IconShield size={11} />{coopId(worker)}</span>
+        <span className="chip bg-accent-50 text-accent-700">Member Verified</span>
+        <span className="chip bg-amber-50 text-amber-700">₹5L Insured</span>
+      </div>
+
+      <div className="mt-3">
+        {action || (note && <p className="text-center text-xs text-slate-400">{note}</p>)}
+      </div>
+    </div>
+  );
+}
+
+export { IconArrowRight };

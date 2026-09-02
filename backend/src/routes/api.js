@@ -4,16 +4,27 @@ import { db, tx } from '../db.js';
 import { config } from '../config.js';
 import { logActivity, recentActivity } from '../activity.js';
 import { notifyAll, integrationStatus } from '../notify.js';
+import { requireRole } from '../auth.js';
+import { createWorkerProfile } from '../users.js';
 import {
   SERVICE_TYPES,
   normalizeServiceType,
   matchWorkers,
+  workerEligibleForJob,
   cooldownExpiry,
 } from '../matching.js';
 
 export const api = Router();
 
 const nowIso = () => new Date().toISOString();
+const gigExpiry = (from = new Date()) =>
+  new Date(from.getTime() + config.gigExpiryHours * 3600 * 1000).toISOString();
+
+/** True when the caller is a customer whose account does not own this job. */
+const customerBlocked = (req, job) =>
+  req.user?.role === 'customer' &&
+  job.customerUserId &&
+  job.customerUserId !== req.user.userId;
 const jobById = (id) => db.prepare('SELECT * FROM jobs WHERE jobId = ?').get(id);
 const workerById = (id) => db.prepare('SELECT * FROM workers WHERE workerId = ?').get(id);
 const hydrateJob = (j) => (j ? { ...j, shortlist: j.shortlist ? JSON.parse(j.shortlist) : [] } : j);
@@ -27,6 +38,7 @@ const hydrateInterest = (r) => {
     phoneno: w.phoneno,
     location: w.location,
     availability: w.availability,
+    skill: w.skill,
   };
 };
 
@@ -45,8 +57,19 @@ api.post('/create-gig', async (req, res) => {
   if (!SERVICE_TYPES.includes(serviceType))
     return bad(res, `serviceType must be one of ${SERVICE_TYPES.join(', ')}`);
 
+  // Optional issue photo — accept only a reasonably-sized image data URL.
+  let photoData = '';
+  if (b.photo) {
+    if (typeof b.photo !== 'string' || !/^data:image\/(png|jpe?g|webp);base64,/.test(b.photo))
+      return bad(res, 'photo must be a PNG/JPEG/WebP data URL');
+    if (b.photo.length > 8 * 1024 * 1024) return bad(res, 'photo is too large (max ~6MB)');
+    photoData = b.photo;
+  }
+
   const jobId = `J-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4)}`;
   const createdAt = nowIso();
+  const expiresAt = gigExpiry(new Date(createdAt));
+  const customerUserId = req.user?.role === 'customer' ? req.user.userId : null;
 
   const { eligible, rejected } = matchWorkers({ serviceType, location: b.location });
   const shortlist = eligible.map((w) => w.workerId);
@@ -54,8 +77,9 @@ api.post('/create-gig', async (req, res) => {
   db.prepare(
     `INSERT INTO jobs
       (jobId, customerName, customerEmail, customerContact, serviceType, location,
-       description, preferredTime, jobStatus, createdAt, assignedWorkerId, shortlist)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, NULL, ?)`
+       description, preferredTime, jobStatus, createdAt, assignedWorkerId, shortlist,
+       customerUserId, expiresAt, photoData)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, NULL, ?, ?, ?, ?)`
   ).run(
     jobId,
     b.customerName,
@@ -66,7 +90,10 @@ api.post('/create-gig', async (req, res) => {
     b.description || '',
     b.preferredTime || '',
     createdAt,
-    JSON.stringify(shortlist)
+    JSON.stringify(shortlist),
+    customerUserId,
+    expiresAt,
+    photoData
   );
 
   logActivity({
@@ -103,6 +130,7 @@ api.post('/create-gig', async (req, res) => {
     notifiedWorkers: shortlist,
     eligibleCount: eligible.length,
     skippedWorkers: rejected,
+    expiresAt,
   });
 });
 
@@ -119,6 +147,10 @@ api.post('/worker-accept', async (req, res) => {
 
   const worker = workerById(b.workerId);
   if (!worker) return bad(res, 'unknown workerId', 404);
+
+  if (req.user?.role === 'worker' && req.user.workerId !== b.workerId)
+    return bad(res, 'you can only express interest as yourself', 403);
+  if (req.user?.role === 'customer') return bad(res, 'customers cannot express interest', 403);
 
   const workerName = b.workerName || worker.name;
   const workerEmail = b.workerEmail || worker.email;
@@ -173,6 +205,8 @@ api.post('/customer-hire', async (req, res) => {
 
   const job = jobById(b.jobId);
   if (!job) return bad(res, 'unknown jobId', 404);
+  if (customerBlocked(req, job)) return bad(res, 'this gig belongs to another account', 403);
+  if (job.jobStatus === 'CANCELLED') return bad(res, 'gig was cancelled');
   if (job.jobStatus === 'ASSIGNED') return bad(res, 'job already assigned');
 
   const interests = db.prepare('SELECT * FROM interests WHERE jobId = ?').all(b.jobId);
@@ -236,32 +270,14 @@ api.post('/customer-hire', async (req, res) => {
 // ---------------------------------------------------------------------------
 api.post('/new_worker', async (req, res) => {
   const b = req.body || {};
-  const required = ['name', 'skill', 'location'];
-  const missing = required.filter((k) => !b[k]);
-  if (missing.length) return bad(res, `missing fields: ${missing.join(', ')}`);
 
+  let workerId;
+  try {
+    workerId = createWorkerProfile(b);
+  } catch (err) {
+    return bad(res, err.message);
+  }
   const skill = normalizeServiceType(b.skill);
-  if (!SERVICE_TYPES.includes(skill))
-    return bad(res, `skill must be one of ${SERVICE_TYPES.join(', ')}`);
-
-  const workerId = b.workerId || `W-${Date.now().toString(36).toUpperCase()}`;
-  const createdAt = nowIso();
-  db.prepare(
-    `INSERT INTO workers
-      (workerId, name, phoneno, email, skill, availability, location, isActiveMember,
-       rating, ratingCount, recentJobs, membershipScore, cooldownUntil, createdAt)
-     VALUES (?, ?, ?, ?, ?, 'Available', ?, ?, 5.0, 0, 0, ?, NULL, ?)`
-  ).run(
-    workerId,
-    b.name,
-    b.phoneno || b.phone || '',
-    b.email || '',
-    skill,
-    b.location,
-    (b.isActiveMember || 'yes').toLowerCase() === 'no' ? 'no' : 'yes',
-    Number(b.membershipScore ?? 50),
-    createdAt
-  );
 
   logActivity({ kind: 'signup', actor: b.name, message: `${b.name} joined as a ${skill} worker in ${b.location}` });
 
@@ -282,6 +298,7 @@ api.post('/job-complete', async (req, res) => {
   const b = req.body || {};
   const job = jobById(b.jobId);
   if (!job) return bad(res, 'unknown jobId', 404);
+  if (customerBlocked(req, job)) return bad(res, 'this gig belongs to another account', 403);
   if (!job.assignedWorkerId) return bad(res, 'job has no assigned worker');
 
   db.prepare("UPDATE jobs SET jobStatus = 'COMPLETED' WHERE jobId = ?").run(b.jobId);
@@ -305,6 +322,7 @@ api.post('/payment-complete', async (req, res) => {
   const b = req.body || {};
   const job = jobById(b.jobId);
   if (!job) return bad(res, 'unknown jobId', 404);
+  if (customerBlocked(req, job)) return bad(res, 'this gig belongs to another account', 403);
   const amount = Number(b.amount);
   if (!amount || amount <= 0) return bad(res, 'amount must be a positive number');
 
@@ -331,6 +349,7 @@ api.post('/rating-submit', async (req, res) => {
   const b = req.body || {};
   const job = jobById(b.jobId);
   if (!job) return bad(res, 'unknown jobId', 404);
+  if (customerBlocked(req, job)) return bad(res, 'this gig belongs to another account', 403);
   const workerId = b.workerId || job.assignedWorkerId;
   const worker = workerById(workerId);
   if (!worker) return bad(res, 'unknown workerId', 404);
@@ -375,6 +394,7 @@ api.get('/jobs', (req, res) => {
 api.get('/jobs/:id', (req, res) => {
   const job = hydrateJob(jobById(req.params.id));
   if (!job) return bad(res, 'unknown jobId', 404);
+  if (customerBlocked(req, job)) return bad(res, 'this gig belongs to another account', 403);
   const interests = db
     .prepare('SELECT * FROM interests WHERE jobId = ? ORDER BY acceptedAt ASC')
     .all(job.jobId)
@@ -382,6 +402,40 @@ api.get('/jobs/:id', (req, res) => {
   const payments = db.prepare('SELECT * FROM payments WHERE jobId = ?').all(job.jobId);
   const ratings = db.prepare('SELECT * FROM ratings WHERE jobId = ?').all(job.jobId);
   res.json({ job, interests, payments, ratings });
+});
+
+// ---------------------------------------------------------------------------
+// Customer-scoped reads (mobile app). Require a customer token; a customer
+// only ever sees their own gigs and the workers who responded to them.
+// ---------------------------------------------------------------------------
+const jobsForCustomer = (user) =>
+  db
+    .prepare(
+      `SELECT * FROM jobs
+        WHERE customerUserId = ?
+           OR (customerUserId IS NULL AND lower(customerName) = lower(?))
+        ORDER BY createdAt DESC`
+    )
+    .all(user.userId, user.name || '')
+    .map(hydrateJob);
+
+api.get('/me/jobs', requireRole('customer'), (req, res) => {
+  res.json({ jobs: jobsForCustomer(req.user) });
+});
+
+api.get('/me/interested-workers', requireRole('customer'), (req, res) => {
+  const openGigs = jobsForCustomer(req.user).filter((j) => j.jobStatus === 'OPEN');
+  const groups = openGigs.map((job) => ({
+    job,
+    workers: db
+      .prepare("SELECT * FROM interests WHERE jobId = ? AND status = 'INTERESTED' ORDER BY acceptedAt ASC")
+      .all(job.jobId)
+      .map(hydrateInterest),
+  }));
+  res.json({
+    groups,
+    totalInterested: groups.reduce((n, g) => n + g.workers.length, 0),
+  });
 });
 
 api.get('/workers', (req, res) => {
@@ -399,19 +453,30 @@ api.get('/workers', (req, res) => {
 
 api.get('/workers/:id/jobs', (req, res) => {
   const wid = req.params.id;
+  if (req.user?.role === 'worker' && req.user.workerId !== wid)
+    return bad(res, 'you can only view your own jobs', 403);
+  if (req.user?.role === 'customer') return bad(res, 'not available for customers', 403);
+  const worker = workerById(wid);
   const open = db
     .prepare("SELECT * FROM jobs WHERE jobStatus = 'OPEN' ORDER BY createdAt DESC")
     .all()
-    .map(hydrateJob)
-    .filter((j) => j.shortlist.includes(wid) || true); // show all OPEN jobs; shortlist flagged below
+    .map(hydrateJob);
   const myInterests = db.prepare('SELECT jobId, status FROM interests WHERE workerId = ?').all(wid);
   const assigned = db.prepare('SELECT * FROM jobs WHERE assignedWorkerId = ? ORDER BY createdAt DESC').all(wid).map(hydrateJob);
   res.json({
-    openJobs: open.map((j) => ({
-      ...j,
-      matched: j.shortlist.includes(wid),
-      myStatus: myInterests.find((i) => i.jobId === j.jobId)?.status || null,
-    })),
+    openJobs: open.map((j) => {
+      // "matched" reflects the worker's CURRENT eligibility, not the job's
+      // frozen shortlist — so a worker who joined after the job was posted can
+      // still see and accept jobs they qualify for.
+      const { eligible, reason } = workerEligibleForJob(worker, j);
+      return {
+        ...j,
+        matched: eligible,
+        matchReason: reason,
+        notifiedInitially: j.shortlist.includes(wid),
+        myStatus: myInterests.find((i) => i.jobId === j.jobId)?.status || null,
+      };
+    }),
     assignedJobs: assigned,
   });
 });

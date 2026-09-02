@@ -29,6 +29,27 @@ export function isOnCooldown(worker, now = new Date()) {
 }
 
 /**
+ * Live eligibility of a worker for a specific job — computed on demand rather
+ * than read from the job's frozen shortlist, so a worker who signed up AFTER
+ * the job was posted is still matched when they meet the criteria.
+ * Returns { eligible, reason }.
+ */
+export function workerEligibleForJob(worker, job, now = new Date()) {
+  if (!worker || !job) return { eligible: false, reason: 'unknown worker or job' };
+  if (worker.skill !== normalizeServiceType(job.serviceType))
+    return { eligible: false, reason: 'different skill' };
+  if (!locMatch(worker.location, job.location))
+    return { eligible: false, reason: `location ${worker.location} != ${job.location}` };
+  if (String(worker.isActiveMember).toLowerCase() !== 'yes')
+    return { eligible: false, reason: 'inactive membership' };
+  if (worker.availability !== 'Available')
+    return { eligible: false, reason: 'not available' };
+  if (isOnCooldown(worker, now))
+    return { eligible: false, reason: `cooldown until ${worker.cooldownUntil}` };
+  return { eligible: true, reason: null };
+}
+
+/**
  * Replicates the n8n chain:
  *   Find Workers By Skill -> Filter Eligible Workers -> Filter Out Cooldown
  * Returns { eligible, rejected } where rejected carries a reason for the admin UI.

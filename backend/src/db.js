@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { config } from './config.js';
@@ -90,7 +91,65 @@ CREATE TABLE IF NOT EXISTS activity (
   message   TEXT NOT NULL,
   simulated INTEGER NOT NULL DEFAULT 0
 );
+
+-- Accounts for the mobile app. One row per person; a worker account also
+-- carries a linked row in "workers" (workerId).
+CREATE TABLE IF NOT EXISTS users (
+  userId    TEXT PRIMARY KEY,
+  role      TEXT NOT NULL,       -- customer | worker | admin
+  name      TEXT NOT NULL,
+  email     TEXT,
+  phone     TEXT,
+  location  TEXT,
+  workerId  TEXT,                -- FK to workers.workerId  (role = worker)
+  createdAt TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email
+  ON users(lower(email)) WHERE email IS NOT NULL AND email <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone
+  ON users(phone) WHERE phone IS NOT NULL AND phone <> '';
+
+-- One-time passcodes for login / signup.
+CREATE TABLE IF NOT EXISTS otps (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  identifier TEXT NOT NULL,      -- email (lowercased) or phone
+  channel    TEXT NOT NULL,      -- email | sms
+  code       TEXT NOT NULL,
+  purpose    TEXT NOT NULL,      -- login | signup
+  payload    TEXT,               -- JSON: pending signup fields
+  expiresAt  TEXT NOT NULL,
+  consumedAt TEXT,
+  createdAt  TEXT NOT NULL
+);
 `);
+
+/**
+ * Add a column to an existing table if the running database predates it.
+ * CREATE TABLE IF NOT EXISTS never alters an existing table, so schema
+ * additions to jobs/workers need this.
+ */
+function ensureColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  }
+}
+
+ensureColumn('jobs', 'customerUserId', 'TEXT');
+ensureColumn('jobs', 'expiresAt', 'TEXT');       // ISO timestamp — OPEN gig auto-cancel deadline
+ensureColumn('jobs', 'cancelReason', 'TEXT');
+ensureColumn('jobs', 'photoData', 'TEXT');       // optional issue photo, stored as a data: URL
+
+// Backfill a deadline onto any OPEN gig created before this column existed.
+// Kept as a JS ISO string so it sorts/compares consistently with nowIso().
+for (const j of db
+  .prepare("SELECT jobId, createdAt FROM jobs WHERE jobStatus = 'OPEN' AND (expiresAt IS NULL OR expiresAt = '')")
+  .all()) {
+  const deadline = new Date(
+    new Date(j.createdAt).getTime() + config.gigExpiryHours * 3600 * 1000
+  ).toISOString();
+  db.prepare('UPDATE jobs SET expiresAt = ? WHERE jobId = ?').run(deadline, j.jobId);
+}
 
 /** node:sqlite has no .transaction() helper; provide a minimal one. */
 export function tx(fn) {
@@ -139,5 +198,26 @@ export function seedIfEmpty() {
       createdAt: now,
     });
   }
+  return true;
+}
+
+/**
+ * Ensure a single admin account exists so an operator can always log in.
+ * Additional admins are created through /auth signup with the invite code.
+ */
+export function seedAuth() {
+  const existing = db.prepare("SELECT userId FROM users WHERE role = 'admin' LIMIT 1").get();
+  if (existing) return false;
+  db.prepare(
+    `INSERT INTO users (userId, role, name, email, phone, location, workerId, createdAt)
+     VALUES (?, 'admin', ?, ?, ?, ?, NULL, ?)`
+  ).run(
+    `U-${randomUUID().slice(0, 8).toUpperCase()}`,
+    config.adminName,
+    config.adminEmail.toLowerCase(),
+    config.adminPhone,
+    '',
+    new Date().toISOString()
+  );
   return true;
 }

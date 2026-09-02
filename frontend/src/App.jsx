@@ -49,7 +49,7 @@ export default function App() {
         <div className="mx-auto max-w-5xl px-4">
           <div className="flex items-center justify-between py-3">
             <div className="flex items-center gap-2.5">
-              <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-600 font-bold text-white shadow-sm">S</div>
+              <div className="grid h-9 w-9 place-items-center rounded-xl bg-grad-brand font-display font-bold text-white shadow-sm">S</div>
               <div>
                 <div className="text-[15px] font-semibold leading-tight text-slate-900">Sahayak</div>
                 <div className="text-[11px] leading-tight text-slate-500">Cooperative gig-worker matching</div>
